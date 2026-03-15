@@ -8,8 +8,10 @@ from app.models.session import CoupleSession
 from app.models.survey import SurveyResponse
 from app.services.matching import merge_preferences, MatchedPreferences
 from app.services.places import find_restaurants
+from app.logger import get_logger
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 class RecommendationRequest(BaseModel):
@@ -51,8 +53,14 @@ class RecommendationResponse(BaseModel):
 async def get_recommendations(body: RecommendationRequest, db: Session = Depends(get_db)):
     session = db.query(CoupleSession).filter(CoupleSession.id == body.session_id).first()
     if not session:
+        logger.warning("Recommendations requested for unknown session: %s", body.session_id)
         raise HTTPException(status_code=404, detail="Session not found")
     if session.status != "complete":
+        logger.warning(
+            "Recommendations requested before survey completion for session: %s (status: %s)",
+            body.session_id,
+            session.status,
+        )
         raise HTTPException(status_code=400, detail="Both partners must complete the survey first")
 
     responses = db.query(SurveyResponse).filter(
@@ -60,10 +68,19 @@ async def get_recommendations(body: RecommendationRequest, db: Session = Depends
     ).all()
 
     if len(responses) < 2:
+        logger.error("Session %s marked complete but has only %d survey response(s)", body.session_id, len(responses))
         raise HTTPException(status_code=400, detail="Both partners must complete the survey first")
 
     prefs = merge_preferences(responses[0], responses[1])
+    logger.info(
+        "Fetching restaurants for session %s — cuisines: %s, location: (%.4f, %.4f)",
+        body.session_id,
+        prefs.cuisines,
+        body.latitude,
+        body.longitude,
+    )
     restaurants = await find_restaurants(prefs, body.latitude, body.longitude)
+    logger.info("Returning %d restaurant(s) for session: %s", len(restaurants), body.session_id)
 
     return RecommendationResponse(
         matched_preferences=MatchedPrefsOut(

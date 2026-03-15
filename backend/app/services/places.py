@@ -4,6 +4,9 @@ from typing import List, Optional
 import httpx
 from app.config import settings
 from app.services.matching import MatchedPreferences
+from app.logger import get_logger
+
+logger = get_logger(__name__)
 
 PLACES_URL = "https://places.googleapis.com/v1/places:searchNearby"
 
@@ -93,7 +96,16 @@ async def _search_one_keyword(
         resp.raise_for_status()
         data = resp.json()
         return data.get("places", [])
-    except Exception:
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "Places API HTTP error for keyword '%s': %d %s",
+            keyword,
+            exc.response.status_code,
+            exc.response.text[:200],
+        )
+        return []
+    except Exception as exc:
+        logger.error("Places API request failed for keyword '%s': %s", keyword, exc)
         return []
 
 

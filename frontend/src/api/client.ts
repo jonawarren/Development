@@ -3,13 +3,22 @@ import type { SessionCreated, SessionStatus, SurveyInfo, SurveySubmit, Recommend
 const BASE = '/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const method = options?.method ?? 'GET';
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (err) {
+    console.error('[API network error]', method, path, err);
+    throw err;
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const message = err.detail || `HTTP ${res.status}`;
+    console.error('[API error]', method, path, res.status, message);
+    throw new Error(message);
   }
   return res.json();
 }
