@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { SurveySubmit } from '../types';
 import { SurveyForm } from '../components/SurveyForm/SurveyForm';
@@ -8,12 +8,12 @@ import { ErrorBanner } from '../components/ErrorBanner';
 
 export function Survey() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -31,11 +31,14 @@ export function Survey() {
     setSubmitting(true);
     setError(null);
     try {
-      await api.submitSurvey(token, data);
-      setSubmitted(true);
+      const result = await api.submitSurvey(token, data);
+      if (result.status === 'complete') {
+        navigate(`/results/${result.session_id}`);
+      } else {
+        navigate(`/waiting/${result.session_id}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Submission failed');
-    } finally {
       setSubmitting(false);
     }
   };
@@ -68,36 +71,6 @@ export function Survey() {
           {sessionId && (
             <a href={`/waiting/${sessionId}`} style={{ color: '#2563eb', display: 'block', marginTop: '1rem' }}>
               Check if your partner is done →
-            </a>
-          )}
-        </div>
-      ) : submitted ? (
-        <div style={{
-          background: '#f0fdf4',
-          border: '1px solid #86efac',
-          borderRadius: '10px',
-          padding: '1.5rem',
-          textAlign: 'center',
-          color: '#15803d',
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎉</div>
-          <h2 style={{ margin: 0 }}>Survey submitted!</h2>
-          <p style={{ margin: '0.5rem 0 0' }}>Waiting for your partner to complete their survey…</p>
-          {sessionId && (
-            <a
-              href={`/waiting/${sessionId}`}
-              style={{
-                display: 'inline-block',
-                marginTop: '1.25rem',
-                padding: '0.75rem 2rem',
-                background: '#16a34a',
-                color: '#fff',
-                borderRadius: '10px',
-                textDecoration: 'none',
-                fontWeight: 700,
-              }}
-            >
-              Go to Waiting Room →
             </a>
           )}
         </div>
